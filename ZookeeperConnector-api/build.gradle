@@ -1,0 +1,20 @@
+dependencies {
+	//SLF4J
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: project.slf4jVersion
+	//Atteo
+	implementation 'org.atteo.classindex:classindex:' + project.atteoClassIndexVersion
+	annotationProcessor('org.atteo.classindex:classindex:' + project.atteoClassIndexVersion)
+	//Water Core dependencies
+    implementation group: "it.water.core", name: "Core-api", version: project.waterVersion
+	implementation group: "it.water.core", name:"Core-interceptors", version:project.waterVersion
+	implementation group: 'org.apache.curator', name: 'curator-recipes', version: project.apacheCuratorVersion
+}
+
+publishing {
+    	publications {
+        	hyperiot(MavenPublication) {
+            	from components.java
+        }
+    }
+ }
+ 
