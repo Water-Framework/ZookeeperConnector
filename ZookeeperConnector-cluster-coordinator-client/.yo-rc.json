@@ -1,0 +1,9 @@
+{
+    "generator-hyperiot": {
+        "inner-project": true,
+        "project-type": "custom",
+        "projectName": "ZookeeperConnector-cluster-coordinator-client",
+        "projectGroupId": "it.water.connectors.zookeeper",
+        "projectVersion": "project.waterVersion"
+    }
+}

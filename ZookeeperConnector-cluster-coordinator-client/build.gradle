@@ -1,0 +1,31 @@
+
+dependencies {
+	//SLF4J
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: project.slf4jVersion
+	//lombok
+    implementation group: 'org.projectlombok', name: 'lombok', version: project.lombokVersion
+    annotationProcessor 'org.projectlombok:lombok:'+project.lombokVersion
+	//Atteo
+	implementation 'org.atteo.classindex:classindex:' + project.atteoClassIndexVersion
+	annotationProcessor('org.atteo.classindex:classindex:' + project.atteoClassIndexVersion)
+
+	implementation group: "it.water.core", name: "Core-api", version: project.waterVersion
+	implementation group: "it.water.core", name:"Core-interceptors", version:project.waterVersion
+	implementation group: 'org.apache.curator', name: 'curator-recipes', version: project.apacheCuratorVersion
+
+	implementation project (":ZookeeperConnector-api")
+	implementation project (":ZookeeperConnector-model")
+
+	testAnnotationProcessor 'org.projectlombok:lombok:'+project.lombokVersion
+	testAnnotationProcessor('org.atteo.classindex:classindex:' + project.atteoClassIndexVersion)
+	testImplementation 'org.mockito:mockito-core:4.6.1'
+	testImplementation 'org.mockito:mockito-junit-jupiter:4.6.1'
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:' + project.junitJupiterVersion
+	testImplementation 'org.junit.jupiter:junit-jupiter-engine:' + project.junitJupiterVersion
+	testImplementation 'org.atteo.classindex:classindex:' + project.atteoClassIndexVersion
+}
+
+test {
+	useJUnitPlatform()
+}
+
