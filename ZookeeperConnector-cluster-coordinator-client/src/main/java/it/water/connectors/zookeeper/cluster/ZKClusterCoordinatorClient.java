@@ -24,12 +24,12 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient {
 
     @Override
     public void subscribeToClusterEvents(ClusterObserver clusterObserver) {
-
+        //todo implement
     }
 
     @Override
     public void unsubscribeToClusterEvents(ClusterObserver clusterObserver) {
-
+        //todo implement
     }
 
     @Override
