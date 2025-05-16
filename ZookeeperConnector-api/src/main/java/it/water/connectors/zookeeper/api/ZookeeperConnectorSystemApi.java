@@ -12,26 +12,42 @@ import org.apache.zookeeper.CreateMode;
  */
 public interface ZookeeperConnectorSystemApi extends BaseSystemApi {
 
+    void addZookeeperClient(ZookeeperClient zookeeperClient);
+
+    void removeZookeeperClient(ZookeeperClient zookeeperClient);
+
     @OnDeactivate
     void deactivate();
 
     /**
      * Waits for the connection thread to complete succesfully
+     *
      * @throws InterruptedException
      */
     void awaitRegistration() throws InterruptedException;
+
     /**
-     *
      * @return cluster path for leader election of cluster nodes and info
      */
     String getCurrentNodePath();
 
     /**
+     * Return the cluster path in order to perform peer discovery
      *
+     * @return
+     */
+    String getClusterPath();
+
+    /**
+     * @return
+     */
+    String getPeerPath(String nodeId);
+
+    /**
      * @param serviceName
      * @return service path in order to orchestrate microservices leader election and info
      */
-    String getCurrentServicePath(String serviceName,String instanceId);
+    String getCurrentServicePath(String serviceName, String instanceId);
 
     /**
      * Registers for leadership at the given path
@@ -138,7 +154,7 @@ public interface ZookeeperConnectorSystemApi extends BaseSystemApi {
      * @throws Exception
      */
     @SuppressWarnings("java:S112")
-    boolean checkExists(String path) throws Exception;
+    boolean pathExists(String path) throws Exception;
 
     /**
      * @return

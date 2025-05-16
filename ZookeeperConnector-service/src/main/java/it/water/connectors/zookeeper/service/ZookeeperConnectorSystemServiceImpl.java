@@ -1,16 +1,20 @@
 package it.water.connectors.zookeeper.service;
 
+import it.water.connectors.zookeeper.api.ZookeeperClient;
 import it.water.connectors.zookeeper.api.ZookeeperConnectorSystemApi;
 import it.water.connectors.zookeeper.model.ZKConstants;
-import it.water.connectors.zookeeper.model.ZKData;
 import it.water.core.api.bundle.ApplicationProperties;
 import it.water.core.api.interceptors.OnActivate;
 import it.water.core.api.interceptors.OnDeactivate;
+import it.water.core.api.service.cluster.ClusterNodeOptions;
 import it.water.core.interceptors.annotations.FrameworkComponent;
+import it.water.core.interceptors.annotations.Inject;
 import it.water.core.service.BaseSystemServiceImpl;
+import lombok.Setter;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.imps.CuratorFrameworkState;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.curator.framework.recipes.leader.LeaderLatchListener;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
@@ -18,9 +22,10 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.data.Stat;
 
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 
 /**
@@ -29,19 +34,44 @@ import java.util.Map;
  */
 @FrameworkComponent
 public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl implements ZookeeperConnectorSystemApi {
+    @Inject
+    @Setter
+    private ClusterNodeOptions clusterNodeOptions;
     private CuratorFramework client;
     private HashMap<String, LeaderLatch> leaderSelectorsMap;
     private Map<String, InterProcessMutex> interProcessMutex;
-    private String nodeId = "";
-    private String layer = "";
     private String zkUrl = "localhost:2181";
     private String zookeeperBasePath = ZKConstants.WATER_ZOOKEEPER_DEFAULT_BASE_PATH;
     private Thread registrationThread;
+    private Set<ZookeeperClient> zookeeperClients;
 
     public ZookeeperConnectorSystemServiceImpl() {
         getLog().debug("Creating service for ZookeeperConnectorSystemApi");
         leaderSelectorsMap = new HashMap<>();
         interProcessMutex = new HashMap<>();
+        this.zookeeperClients = new HashSet<>();
+    }
+
+    @Override
+    public void addZookeeperClient(ZookeeperClient zookeeperClient) {
+        this.zookeeperClients.add(zookeeperClient);
+        //When adding a client if connection is already open, let's notify it
+        notifyConnectionOpened(zookeeperClient);
+    }
+
+    @Override
+    public void removeZookeeperClient(ZookeeperClient zookeeperClient) {
+        this.zookeeperClients.remove(zookeeperClient);
+    }
+
+    private void notifyConnectionOpened(ZookeeperClient zookeeperClient) {
+        if (this.client != null && client.getState() == CuratorFrameworkState.STARTED) {
+            zookeeperClient.onConnectionOpened(this, clusterNodeOptions);
+        }
+    }
+
+    private void notifyConnectionClosed(ZookeeperClient zookeeperClient) {
+        zookeeperClient.onConnectionClosed();
     }
 
     /**
@@ -52,15 +82,23 @@ public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl i
     public void activate(ApplicationProperties applicationProperties) {
         getLog().debug("Activating Zookeeper Connector System API");
         zookeeperBasePath = applicationProperties.getPropertyOrDefault(ZKConstants.WATER_ZOOKEEPER_PATH, ZKConstants.WATER_ZOOKEEPER_DEFAULT_BASE_PATH);
-        nodeId = applicationProperties.getPropertyOrDefault(ZKConstants.SERVICE_NODE_ID, "default-node-id");
-        layer = applicationProperties.getPropertyOrDefault(ZKConstants.SERVICE_LAYER, "default-layer");
         zkUrl = applicationProperties.getPropertyOrDefault(ZKConstants.ZOOKEEPER_CONNECTION_URL, "localhost:2181");
         createZookeeperConnection();
     }
 
     @Override
     public String getCurrentNodePath() {
-        return zookeeperBasePath + "/" + layer + "/" + nodeId;
+        return getPeerPath(this.clusterNodeOptions.getNodeId());
+    }
+
+    @Override
+    public String getClusterPath() {
+        return zookeeperBasePath + "/" + this.clusterNodeOptions.getLayer();
+    }
+
+    @Override
+    public String getPeerPath(String nodeId) {
+        return getClusterPath() + "/" + nodeId;
     }
 
     @Override
@@ -74,38 +112,26 @@ public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl i
         this.registrationThread = new Thread(() -> {
             ZookeeperConnectorSystemServiceImpl.this.client = CuratorFrameworkFactory.newClient(zkUrl, retryPolicy);
             client.start();
-            ZookeeperConnectorSystemServiceImpl.this.registerContainerInfo();
+            ZookeeperConnectorSystemServiceImpl.this.zookeeperClients.forEach(this::notifyConnectionOpened);
         });
         registrationThread.start();
     }
 
-    public void awaitRegistration() throws InterruptedException {
-        if (this.registrationThread != null && this.registrationThread.isAlive())
+    public synchronized void awaitRegistration() throws InterruptedException {
+        if (this.client == null && this.registrationThread != null && this.registrationThread.isAlive()) {
             this.registrationThread.join();
+            if(this.registrationThread.isAlive())
+                getLog().error("Zookeeper connection attemp still runnning after 30 seconds, please check network or configuration!");
+        }
     }
 
     @OnDeactivate
     public void deactivate() {
         getLog().debug("Disconnecting from Zookeeper....");
         this.client.close();
+        ZookeeperConnectorSystemServiceImpl.this.zookeeperClients.forEach(this::notifyConnectionClosed);
     }
 
-    /**
-     * Writes to zookeeper current container info
-     */
-    private void registerContainerInfo() {
-        try {
-            ZKData data = new ZKData();
-            String path = this.getCurrentNodePath();
-            data.addParam("nodeId", nodeId.getBytes(StandardCharsets.UTF_8));
-            data.addParam("layer", layer.getBytes(StandardCharsets.UTF_8));
-            if (getLog().isDebugEnabled())
-                getLog().debug("Registering Container info on zookeeper with nodeId: {} layer: {} data: \n {}", nodeId, layer, new String(data.getBytes()));
-            this.create(CreateMode.EPHEMERAL, path, data.getBytes(), true);
-        } catch (Exception e) {
-            getLog().error(e.getMessage(), e);
-        }
-    }
 
     public void registerLeadershipComponent(String leadershipPath) {
         String zkPath = zookeeperBasePath + leadershipPath;
@@ -124,7 +150,6 @@ public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl i
             getLog().error(e.getMessage(), e);
         }
     }
-
 
     /**
      * @param mode
@@ -225,9 +250,14 @@ public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl i
     }
 
     @Override
-    public boolean checkExists(String path) throws Exception {
-        Stat stats = this.client.checkExists().forPath(path);
-        return stats != null;
+    public boolean pathExists(String path) {
+        try {
+            Stat stats = this.client.checkExists().forPath(path);
+            return stats != null;
+        } catch (Exception e) {
+            getLog().error(e.getMessage(), e);
+        }
+        return false;
     }
 
     @Override
@@ -284,7 +314,7 @@ public class ZookeeperConnectorSystemServiceImpl extends BaseSystemServiceImpl i
     private LeaderLatch getOrCreateLeaderLatch(String mutexPath) {
         LeaderLatch ll = null;
         if (!leaderSelectorsMap.containsKey(mutexPath)) {
-            ll = new LeaderLatch(this.client, mutexPath, nodeId);
+            ll = new LeaderLatch(this.client, mutexPath, this.clusterNodeOptions.getNodeId());
             leaderSelectorsMap.put(mutexPath, ll);
         } else {
             ll = leaderSelectorsMap.get(mutexPath);

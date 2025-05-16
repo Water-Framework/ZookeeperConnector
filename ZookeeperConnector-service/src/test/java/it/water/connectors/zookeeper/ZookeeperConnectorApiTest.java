@@ -106,8 +106,6 @@ class ZookeeperConnectorApiTest implements Service {
         String zkBasePath = applicationProperties.getPropertyOrDefault(ZKConstants.WATER_ZOOKEEPER_PATH, ZKConstants.WATER_ZOOKEEPER_DEFAULT_BASE_PATH);
         Assertions.assertEquals(zkBasePath + "/services/aservice/instanceA", zookeeperConnectorSystemApi.getCurrentServicePath("aservice", "instanceA"));
         Assertions.assertNotNull(zkBasePath);
-        Assertions.assertNotNull(ZKConstants.SERVICE_LAYER);
-        Assertions.assertNotNull(ZKConstants.SERVICE_NODE_ID);
         Assertions.assertNotNull(ZKConstants.ZOOKEEPER_CONNECTION_URL);
     }
 
@@ -120,10 +118,10 @@ class ZookeeperConnectorApiTest implements Service {
         String updateString = new String(update);
         String testPath = "/test/path";
         try {
-            Assertions.assertFalse(zookeeperConnectorSystemApi.checkExists(testPath));
+            Assertions.assertFalse(zookeeperConnectorSystemApi.pathExists(testPath));
             zookeeperConnectorSystemApi.create("/random", data, true);
             zookeeperConnectorSystemApi.create(CreateMode.PERSISTENT, testPath, data, true);
-            Assertions.assertTrue(zookeeperConnectorSystemApi.checkExists(testPath));
+            Assertions.assertTrue(zookeeperConnectorSystemApi.pathExists(testPath));
             Assertions.assertEquals(dataString, new String(zookeeperConnectorSystemApi.read(testPath)));
             zookeeperConnectorSystemApi.createEphemeral(testPath + "/ephemeral", data, true);
             Assertions.assertEquals(dataString, new String(zookeeperConnectorSystemApi.read(testPath + "/ephemeral")));
@@ -132,7 +130,7 @@ class ZookeeperConnectorApiTest implements Service {
             zookeeperConnectorSystemApi.update(testPath + "/persistent", update);
             Assertions.assertEquals(updateString, new String(zookeeperConnectorSystemApi.read(testPath + "/persistent")));
             zookeeperConnectorSystemApi.delete(testPath + "/persistent");
-            Assertions.assertFalse(zookeeperConnectorSystemApi.checkExists(testPath + "/persistent"));
+            Assertions.assertFalse(zookeeperConnectorSystemApi.pathExists(testPath + "/persistent"));
         } catch (Exception e) {
             e.printStackTrace();
             Assertions.fail();
