@@ -60,6 +60,8 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
     @Override
     public void onConnectionOpened(ZookeeperConnectorSystemApi zookeeperConnectorSystemApi, ClusterNodeOptions clusterNodeOptions) {
         //do nothing since cluster registration is done by the framework lifecycle
+        this.clusterNodeOptions = clusterNodeOptions;
+        this.zookeeperConnectorSystemApi = zookeeperConnectorSystemApi;
     }
 
     @Override
@@ -112,7 +114,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
     public boolean registerToCluster() {
         //await for connection ready
         Thread thread = new Thread(() -> {
-            await().atMost(30, SECONDS).until(() -> this.zookeeperConnectorSystemApi.getZookeeperCuratorClient().getState().equals(CuratorFrameworkState.STARTED));
+            await().atMost(30, SECONDS).until(() -> this.zookeeperConnectorSystemApi.getZookeeperCuratorClient() != null && this.zookeeperConnectorSystemApi.getZookeeperCuratorClient().getState().equals(CuratorFrameworkState.STARTED));
             if (this.zookeeperConnectorSystemApi.getZookeeperCuratorClient().getState().equals(CuratorFrameworkState.STARTED)) {
                 try {
                     ZKData zkData = new ZKData();
@@ -124,7 +126,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
                     zkData.addParam(ClusterNodeOptions.IP_REGISTRATION_FIELD_NAME, String.valueOf(clusterNodeOptions.useIpInClusterRegistration()).getBytes());
                     if (logger.isDebugEnabled())
                         logger.debug("Registering Container info on zookeeper with nodeId: {} layer: {} data: \n {}", this.clusterNodeOptions.getNodeId(), this.clusterNodeOptions.getLayer(), new String(zkData.getBytes()));
-                    this.zookeeperConnectorSystemApi.createEphemeral(zookeeperConnectorSystemApi.getCurrentNodePath(), zkData.getBytes(), true);
+                    this.zookeeperConnectorSystemApi.createEphemeral(zookeeperConnectorSystemApi.getPeerPath(clusterNodeOptions.getNodeId()), zkData.getBytes(), true);
                     this.started = true;
                     this.subscribeToClusterEvents(this);
                     this.registerClusterEventListener();
@@ -197,7 +199,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
 
     @Override
     public Collection<ClusterNodeInfo> getPeerNodes() {
-        return List.of();
+        return Collections.unmodifiableCollection(this.peers.values());
     }
 
     @Override
@@ -207,7 +209,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
             case PEER_CONNECTED -> this.peers.put(nodeKey, clusterNodeInfo);
             case PEER_DISCONNECTED -> this.peers.remove(nodeKey);
             case PEER_INFO_CHANGED -> this.peers.put(nodeKey, clusterNodeInfo);
-            case PEER_CUSTOM_EVENT -> {/*do nothign*/}
+            case PEER_CUSTOM_EVENT -> {/*do nothing*/}
             case PEER_ERROR -> {/* do nothing*/}
             case PEER_DATA_EVENT -> {/*do nothing*/}
         }
