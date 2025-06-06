@@ -162,7 +162,7 @@ class ZookeeperConnectorApiTest implements Service {
         Assertions.assertNotEquals(zkData, zkData2);
         Assertions.assertNotEquals(zkData, zkData3);
         Assertions.assertNotEquals(zkData, zkData4);
-        Assertions.assertTrue(zkData.hashCode() > 0);
+        Assertions.assertNotEquals(0,zkData.hashCode());
         Assertions.assertTrue(zkData.getParams().containsKey("param1"));
         Assertions.assertTrue(zkData.getParams().containsKey("param2"));
         Assertions.assertTrue(zkData.getParams().containsKey("param3"));

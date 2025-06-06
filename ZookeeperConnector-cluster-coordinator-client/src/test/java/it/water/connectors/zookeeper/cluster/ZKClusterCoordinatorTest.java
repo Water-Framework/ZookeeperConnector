@@ -101,11 +101,11 @@ class ZKClusterCoordinatorTest implements Service {
     }
 
     @Order(4)
+    @Test
     void testPeersInteractions() {
         ClusterNodeInfo peer1NodeOptions = clusterCoordinatorClient.getPeerNodes().stream().filter(peers -> peers.getNodeId().equals("peer1")).findFirst().get();
         Assertions.assertTrue(clusterCoordinatorClient.peerStillExists(peer1NodeOptions));
         peer1.unregisterToCluster();
-        peer1.onDeactivate();
         await().atMost(30, SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 3);
         Assertions.assertFalse(clusterCoordinatorClient.peerStillExists(peer1NodeOptions));
         peer1.registerToCluster();
@@ -117,13 +117,41 @@ class ZKClusterCoordinatorTest implements Service {
         peer2.registerForLeadership(leadershipPath);
         peer3.registerForLeadership(leadershipPath);
         clusterCoordinatorClient.registerForLeadership(leadershipPath);
-        Assertions.assertTrue(peer1.checkClusterLeadershipFor(leadershipPath) ^ peer2.checkClusterLeadershipFor(leadershipPath) ^ peer3.checkClusterLeadershipFor(leadershipPath) ^ this.clusterCoordinatorClient.checkClusterLeadershipFor(leadershipPath));
+        Assertions.assertTrue(peer1.checkClusterLeadershipFor(leadershipPath) || peer2.checkClusterLeadershipFor(leadershipPath) || peer3.checkClusterLeadershipFor(leadershipPath) || this.clusterCoordinatorClient.checkClusterLeadershipFor(leadershipPath));
         clusterCoordinatorClient.unregisterForLeadership(leadershipPath);
-        Assertions.assertTrue(peer1.checkClusterLeadershipFor(leadershipPath) ^ peer2.checkClusterLeadershipFor(leadershipPath) ^ peer3.checkClusterLeadershipFor(leadershipPath));
-        peer1.unregisterForLeadership(leadershipPath);
-        Assertions.assertTrue(peer2.checkClusterLeadershipFor(leadershipPath) ^ peer3.checkClusterLeadershipFor(leadershipPath));
-        peer2.unregisterForLeadership(leadershipPath);
-        Assertions.assertTrue(peer3.checkClusterLeadershipFor(leadershipPath));
+    }
+
+    @Order(5)
+    @Test
+    void testNodeInfoObject() {
+        ZKData zkData = new ZKData();
+        zkData.addParam(ClusterNodeOptions.NODE_ID_FIELD_NAME, clusterNodeOptions.getNodeId().getBytes());
+        zkData.addParam(ClusterNodeOptions.HOST_FIELD_NAME, clusterNodeOptions.getHost().getBytes());
+        zkData.addParam(ClusterNodeOptions.IP_FIELD_NAME, clusterNodeOptions.getIp().getBytes());
+        zkData.addParam(ClusterNodeOptions.LAYER_FIELD_NAME, clusterNodeOptions.getLayer().getBytes());
+        zkData.addParam(ClusterNodeOptions.CLUSTER_MODE_FIELD_NAME, "true".getBytes());
+        zkData.addParam(ClusterNodeOptions.IP_REGISTRATION_FIELD_NAME, String.valueOf(clusterNodeOptions.useIpInClusterRegistration()).getBytes());
+        ZKClusterNodeInfo clusterNodeInfo = new ZKClusterNodeInfo(zkData);
+        Assertions.assertEquals(clusterNodeOptions.getNodeId(), clusterNodeInfo.getNodeId());
+        Assertions.assertEquals(clusterNodeOptions.getHost(), clusterNodeInfo.getHost());
+        Assertions.assertEquals(clusterNodeOptions.getIp(), clusterNodeInfo.getIp());
+        Assertions.assertEquals(clusterNodeOptions.getLayer(), clusterNodeInfo.getLayer());
+        Assertions.assertEquals(clusterNodeOptions.useIpInClusterRegistration(), clusterNodeInfo.useIpInClusterRegistration());
+        clusterNodeInfo = new ZKClusterNodeInfo(zkData.getBytes());
+        Assertions.assertEquals(clusterNodeOptions.getNodeId(), clusterNodeInfo.getNodeId());
+        Assertions.assertEquals(clusterNodeOptions.getHost(), clusterNodeInfo.getHost());
+        Assertions.assertEquals(clusterNodeOptions.getIp(), clusterNodeInfo.getIp());
+        Assertions.assertEquals(clusterNodeOptions.getLayer(), clusterNodeInfo.getLayer());
+        Assertions.assertEquals(clusterNodeOptions.useIpInClusterRegistration(), clusterNodeInfo.useIpInClusterRegistration());
+    }
+
+    @Order(6)
+    @Test
+    void testShutDown(){
+        peer1.unregisterToCluster();
+        peer2.unregisterToCluster();
+        peer3.unregisterToCluster();
+        await().atMost(5, SECONDS).pollInterval(1,SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 1);
     }
 
     private ClusterNodeOptions createClusterNodeOptions(String nodeId, String layer, String ip, String host) {

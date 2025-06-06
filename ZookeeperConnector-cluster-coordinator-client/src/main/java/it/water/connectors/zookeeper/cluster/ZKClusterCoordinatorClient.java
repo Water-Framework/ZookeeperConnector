@@ -11,6 +11,7 @@ import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
 import lombok.Setter;
 import org.apache.curator.framework.imps.CuratorFrameworkState;
+import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.CuratorCache;
 import org.apache.curator.framework.recipes.cache.CuratorCacheBuilder;
 import org.apache.curator.framework.recipes.cache.CuratorCacheListener;
@@ -145,7 +146,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
     public boolean unregisterToCluster() {
         return Boolean.TRUE.equals(doClusterOperation(() -> {
             try {
-                this.zookeeperConnectorSystemApi.delete(this.zookeeperConnectorSystemApi.getCurrentNodePath());
+                this.zookeeperConnectorSystemApi.delete(zookeeperConnectorSystemApi.getPeerPath(clusterNodeOptions.getNodeId()));
                 return true;
             } catch (Exception e) {
                 logger.error(e.getMessage(), e);
@@ -162,21 +163,31 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
                 }
                 CuratorCacheBuilder curatorCacheBuilder = CuratorCache.builder(this.zookeeperConnectorSystemApi.getZookeeperCuratorClient(), this.zookeeperConnectorSystemApi.getClusterPath());
                 this.clusterCuratorCache = curatorCacheBuilder.build();
-                this.clusterCacheListener = CuratorCacheListener.builder().forAll((type, oldData, newData) -> {
-                    AtomicReference<ClusterEvent> atomicClusterEvent = new AtomicReference<>();
-                    switch (type) {
-                        case NODE_CREATED -> atomicClusterEvent.set(ClusterEvent.PEER_CONNECTED);
-                        case NODE_CHANGED -> atomicClusterEvent.set(ClusterEvent.PEER_INFO_CHANGED);
-                        case NODE_DELETED -> atomicClusterEvent.set(ClusterEvent.PEER_DISCONNECTED);
-                    }
-                    clusterObservers.forEach(observer -> observer.onClusterEvent(atomicClusterEvent.get(), new ZKClusterNodeInfo(ZKData.fromBytes(newData.getData())), newData.getData()));
-                }).build();
+                this.clusterCacheListener = CuratorCacheListener.builder().forAll(this::processClusterEvent).build();
                 this.clusterCuratorCache.listenable().addListener(clusterCacheListener);
                 this.clusterCuratorCache.start();
             } catch (Exception e) {
                 logger.error(e.getMessage(), e);
             }
         });
+    }
+
+    private void processClusterEvent(CuratorCacheListener.Type type, ChildData oldData, ChildData newData) {
+        AtomicReference<ClusterEvent> atomicClusterEvent = new AtomicReference<>();
+        boolean dataIsPresent = newData != null && newData.getData() != null;
+        AtomicReference<byte[]> data = new AtomicReference<>();
+        data.set(dataIsPresent ? newData.getData() : new byte[0]);
+        switch (type) {
+            case NODE_CREATED -> atomicClusterEvent.set(ClusterEvent.PEER_CONNECTED);
+            case NODE_CHANGED -> atomicClusterEvent.set(ClusterEvent.PEER_INFO_CHANGED);
+            case NODE_DELETED -> {
+                atomicClusterEvent.set(ClusterEvent.PEER_DISCONNECTED);
+                dataIsPresent = oldData != null && oldData.getData() != null;
+                data.set(dataIsPresent ? oldData.getData() : new byte[0]);
+            }
+        }
+        ZKData zkData = dataIsPresent ? ZKData.fromBytes(data.get()) : new ZKData();
+        clusterObservers.forEach(observer -> observer.onClusterEvent(atomicClusterEvent.get(), new ZKClusterNodeInfo(zkData), data.get()));
     }
 
     @Override
@@ -188,7 +199,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
     public boolean peerStillExists(ClusterNodeInfo clusterNodeInfo) {
         return Boolean.TRUE.equals(doClusterOperation(() -> {
             try {
-                String peerPath = this.zookeeperConnectorSystemApi.getPeerPath(clusterNodeOptions.getNodeId());
+                String peerPath = this.zookeeperConnectorSystemApi.getPeerPath(clusterNodeInfo.getNodeId());
                 return this.zookeeperConnectorSystemApi.pathExists(peerPath);
             } catch (Exception e) {
                 logger.error(e.getMessage(), e);
@@ -198,7 +209,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
     }
 
     @Override
-    public Collection<ClusterNodeInfo> getPeerNodes() {
+    public synchronized Collection<ClusterNodeInfo> getPeerNodes() {
         return Collections.unmodifiableCollection(this.peers.values());
     }
 
