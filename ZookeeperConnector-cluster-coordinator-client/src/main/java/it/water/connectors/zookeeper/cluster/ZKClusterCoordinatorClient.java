@@ -172,6 +172,7 @@ public class ZKClusterCoordinatorClient implements ClusterCoordinatorClient, Clu
         });
     }
 
+    @SuppressWarnings("null")
     private void processClusterEvent(CuratorCacheListener.Type type, ChildData oldData, ChildData newData) {
         AtomicReference<ClusterEvent> atomicClusterEvent = new AtomicReference<>();
         boolean dataIsPresent = newData != null && newData.getData() != null;

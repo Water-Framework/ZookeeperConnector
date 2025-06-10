@@ -5,7 +5,6 @@ import it.water.connectors.zookeeper.api.ZookeeperConnectorSystemApi;
 import it.water.core.api.registry.ComponentRegistry;
 import it.water.core.interceptors.annotations.FrameworkComponent;
 import it.water.core.interceptors.annotations.Inject;
-import it.water.core.permission.annotations.AllowGenericPermissions;
 import it.water.core.service.BaseServiceImpl;
 import lombok.Getter;
 import lombok.Setter;
