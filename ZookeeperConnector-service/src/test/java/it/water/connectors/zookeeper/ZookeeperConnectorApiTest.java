@@ -88,7 +88,8 @@ class ZookeeperConnectorApiTest implements Service {
             Assertions.assertFalse(testLeaderLatchListener.isPathLeader());
             zookeeperConnectorSystemApi.registerLeadershipComponent(leadershipPath);
             zookeeperConnectorSystemApi.addListener(testLeaderLatchListener, leadershipPath);
-            Thread.sleep(1000);
+            zookeeperConnectorSystemApi.addListener(testLeaderLatchListener, "notPath");
+            Thread.sleep(2000);
             //let's test listeners
             Assertions.assertTrue(testLeaderLatchListener.isPathLeader());
             //testing directly with connector API
@@ -120,6 +121,7 @@ class ZookeeperConnectorApiTest implements Service {
         try {
             Assertions.assertFalse(zookeeperConnectorSystemApi.pathExists(testPath));
             zookeeperConnectorSystemApi.create("/random", data, true);
+            zookeeperConnectorSystemApi.create("/noParent", data, false);
             zookeeperConnectorSystemApi.create(CreateMode.PERSISTENT, testPath, data, true);
             Assertions.assertTrue(zookeeperConnectorSystemApi.pathExists(testPath));
             Assertions.assertEquals(dataString, new String(zookeeperConnectorSystemApi.read(testPath)));
@@ -128,6 +130,10 @@ class ZookeeperConnectorApiTest implements Service {
             zookeeperConnectorSystemApi.createPersistent(testPath + "/persistent", data, true);
             Assertions.assertEquals(dataString, new String(zookeeperConnectorSystemApi.read(testPath + "/persistent", true)));
             zookeeperConnectorSystemApi.update(testPath + "/persistent", update);
+            Assertions.assertEquals(updateString, new String(zookeeperConnectorSystemApi.read(testPath + "/persistent")));
+            zookeeperConnectorSystemApi.update(testPath + "/persistent/", update);
+            Assertions.assertEquals(updateString, new String(zookeeperConnectorSystemApi.read(testPath + "/persistent")));
+            zookeeperConnectorSystemApi.update(testPath + "/persistent\\", update);
             Assertions.assertEquals(updateString, new String(zookeeperConnectorSystemApi.read(testPath + "/persistent")));
             zookeeperConnectorSystemApi.delete(testPath + "/persistent");
             Assertions.assertFalse(zookeeperConnectorSystemApi.pathExists(testPath + "/persistent"));
@@ -174,6 +180,8 @@ class ZookeeperConnectorApiTest implements Service {
         try {
             zookeeperConnectorSystemApi.create("/testZkData", zkData.getBytes(), true);
             Assertions.assertEquals(zkData, ZKData.fromBytes(zookeeperConnectorSystemApi.read("/testZkData")));
+            Assertions.assertEquals(zkData, ZKData.fromBytes(zookeeperConnectorSystemApi.read("/testZkData/")));
+            Assertions.assertEquals(zkData, ZKData.fromBytes(zookeeperConnectorSystemApi.read("/testZkData\\")));
         } catch (Exception e) {
             e.printStackTrace();
             Assertions.fail();

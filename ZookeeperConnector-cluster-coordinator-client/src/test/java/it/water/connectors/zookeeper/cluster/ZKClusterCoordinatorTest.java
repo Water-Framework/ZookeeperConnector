@@ -39,8 +39,12 @@ class ZKClusterCoordinatorTest implements Service {
     private ZKClusterCoordinatorClient peer2 = new ZKClusterCoordinatorClient();
     private ZKClusterCoordinatorClient peer3 = new ZKClusterCoordinatorClient();
 
+    private ClusterNodeOptions peer1NodeOptions = createClusterNodeOptions("peer1", "layer", "127.0.0.1", "localhost");
+    private ClusterNodeOptions peer2NodeOptions = createClusterNodeOptions("peer2", "layer", "127.0.0.1", "localhost");
+    private ClusterNodeOptions peer3NodeOptions = createClusterNodeOptions("peer3", "layer", "127.0.0.2", "remoteHost");
+
     @BeforeAll
-    public void startZookeeper() throws Exception {
+    void startZookeeper() throws Exception {
         zkServer = new TestingServer(2181);
         peer1 = new ZKClusterCoordinatorClient();
         peer2 = new ZKClusterCoordinatorClient();
@@ -48,7 +52,7 @@ class ZKClusterCoordinatorTest implements Service {
     }
 
     @AfterAll
-    public void stopZookeeper() throws Exception {
+    void stopZookeeper() throws Exception {
         zkServer.close();
     }
 
@@ -87,9 +91,9 @@ class ZKClusterCoordinatorTest implements Service {
         this.zookeeperConnectorSystemApi.addZookeeperClient(peer2);
         this.zookeeperConnectorSystemApi.addZookeeperClient(peer3);
         //forcing node options in order to override the injected one
-        peer1.setClusterNodeOptions(createClusterNodeOptions("peer1", "layer", "127.0.0.1", "localhost"));
-        peer2.setClusterNodeOptions(createClusterNodeOptions("peer2", "layer", "127.0.0.1", "localhost"));
-        peer3.setClusterNodeOptions(createClusterNodeOptions("peer3", "layer", "127.0.0.2", "remoteHost"));
+        peer1.setClusterNodeOptions(peer1NodeOptions);
+        peer2.setClusterNodeOptions(peer2NodeOptions);
+        peer3.setClusterNodeOptions(peer3NodeOptions);
         peer1.registerToCluster();
         ClusterObserver clusterObserver = createFakeClusterObserver();
         peer1.subscribeToClusterEvents(clusterObserver);
@@ -103,14 +107,14 @@ class ZKClusterCoordinatorTest implements Service {
     @Order(4)
     @Test
     void testPeersInteractions() {
-        ClusterNodeInfo peer1NodeOptions = clusterCoordinatorClient.getPeerNodes().stream().filter(peers -> peers.getNodeId().equals("peer1")).findFirst().get();
-        Assertions.assertTrue(clusterCoordinatorClient.peerStillExists(peer1NodeOptions));
+        ClusterNodeInfo nodeOpt = clusterCoordinatorClient.getPeerNodes().stream().filter(peers -> peers.getNodeId().equals("peer1")).findFirst().get();
+        Assertions.assertTrue(clusterCoordinatorClient.peerStillExists(nodeOpt));
         peer1.unregisterToCluster();
         await().atMost(30, SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 3);
-        Assertions.assertFalse(clusterCoordinatorClient.peerStillExists(peer1NodeOptions));
+        Assertions.assertFalse(clusterCoordinatorClient.peerStillExists(nodeOpt));
         peer1.registerToCluster();
         await().atMost(30, SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 4);
-        Assertions.assertTrue(clusterCoordinatorClient.peerStillExists(peer1NodeOptions));
+        Assertions.assertTrue(clusterCoordinatorClient.peerStillExists(nodeOpt));
         //we just write as an example but all peers in this test refer to the same client
         String leadershipPath = "leadershipTest";
         peer1.registerForLeadership(leadershipPath);
@@ -147,12 +151,24 @@ class ZKClusterCoordinatorTest implements Service {
 
     @Order(6)
     @Test
+    void testForCoverage(){
+        ClusterNodeInfo nodeInfo = clusterCoordinatorClient.getPeerNodes().stream().filter(peers -> peers.getNodeId().equals("peer1")).findFirst().get();
+        Assertions.assertDoesNotThrow(() -> peer1.onClusterEvent(ClusterEvent.PEER_INFO_CHANGED,nodeInfo , null));
+        Assertions.assertDoesNotThrow(() -> peer1.onClusterEvent(ClusterEvent.PEER_CUSTOM_EVENT, nodeInfo, null));
+        Assertions.assertDoesNotThrow(() -> peer1.onClusterEvent(ClusterEvent.PEER_DATA_EVENT, nodeInfo, null));
+        Assertions.assertDoesNotThrow(() -> peer1.onClusterEvent(ClusterEvent.PEER_ERROR, nodeInfo, null));
+    }
+
+    @Order(7)
+    @Test
     void testShutDown(){
         peer1.unregisterToCluster();
         peer2.unregisterToCluster();
         peer3.unregisterToCluster();
         await().atMost(5, SECONDS).pollInterval(1,SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 1);
+        Assertions.assertDoesNotThrow(() -> this.clusterCoordinatorClient.onDeactivate());
     }
+
 
     private ClusterNodeOptions createClusterNodeOptions(String nodeId, String layer, String ip, String host) {
         return new ClusterNodeOptions() {
