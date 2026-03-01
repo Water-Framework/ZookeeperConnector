@@ -59,3 +59,32 @@ publishing {
         	}
     }
  }
+
+waterDescriptor {
+    moduleId    = 'it.water.connectors.zookeeper'
+    displayName = 'Zookeeper Connector'
+    description = 'Apache ZooKeeper integration for distributed coordination: leader election, peer discovery, and cluster-aware configuration'
+
+    properties {
+        property('it.water.connectors.zookeeper.url') {
+            type         = 'string'
+            envVar       = 'WATER_ZOOKEEPER_URL'
+            required     = true
+            sensitive    = false
+            defaultValue = 'localhost:2181'
+            description  = 'ZooKeeper connection string (host:port, comma-separated for cluster)'
+        }
+        property('it.water.connectors.zookeeper.base.path') {
+            type         = 'string'
+            envVar       = 'WATER_ZOOKEEPER_BASE_PATH'
+            required     = false
+            sensitive    = false
+            defaultValue = '/water-framework/layers'
+            description  = 'ZooKeeper root path for all Water Framework nodes'
+        }
+    }
+
+    output {
+        pin('it.water.integration.cluster-coordinator') {}
+    }
+}
