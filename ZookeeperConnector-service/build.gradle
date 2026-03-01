@@ -67,6 +67,7 @@ waterDescriptor {
 
     properties {
         property('it.water.connectors.zookeeper.url') {
+            name         = 'ZooKeeper URL'
             type         = 'string'
             envVar       = 'WATER_ZOOKEEPER_URL'
             required     = true
@@ -75,6 +76,7 @@ waterDescriptor {
             description  = 'ZooKeeper connection string (host:port, comma-separated for cluster)'
         }
         property('it.water.connectors.zookeeper.base.path') {
+            name         = 'Base Path'
             type         = 'string'
             envVar       = 'WATER_ZOOKEEPER_BASE_PATH'
             required     = false
