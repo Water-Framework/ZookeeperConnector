@@ -64,6 +64,7 @@ waterDescriptor {
     moduleId    = 'it.water.connectors.zookeeper'
     displayName = 'Zookeeper Connector'
     description = 'Apache ZooKeeper integration for distributed coordination: leader election, peer discovery, and cluster-aware configuration'
+    componentsPackage = 'it.water.connectors.zookeeper.service'
 
     properties {
         property('it.water.connectors.zookeeper.url') {
