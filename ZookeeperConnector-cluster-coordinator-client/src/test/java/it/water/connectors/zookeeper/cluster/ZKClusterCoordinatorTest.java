@@ -165,7 +165,10 @@ class ZKClusterCoordinatorTest implements Service {
         peer1.unregisterToCluster();
         peer2.unregisterToCluster();
         peer3.unregisterToCluster();
-        await().atMost(5, SECONDS).pollInterval(1,SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 1);
+        //removal of the 3 ephemeral peer nodes must propagate through ZooKeeper watches and the
+        //Curator cache before the peer count settles at 1 (only the current node left). Use the
+        //same 30s budget as the other awaits in this test: 5s was too tight and failed intermittently.
+        await().atMost(30, SECONDS).pollInterval(1,SECONDS).until(() -> clusterCoordinatorClient.getPeerNodes().size() == 1);
         Assertions.assertDoesNotThrow(() -> this.clusterCoordinatorClient.onDeactivate());
     }
 
